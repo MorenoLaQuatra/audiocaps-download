@@ -122,6 +122,11 @@ class Downloader:
             ) for _, row in tqdm(self.test_df.iterrows())
         )
 
+        # store the CSV files
+        self.train_df.to_csv(self.root_path + '/train.csv', index=False)
+        self.val_df.to_csv(self.root_path + '/val.csv', index=False)
+        self.test_df.to_csv(self.root_path + '/test.csv', index=False)
+
         t2 = time.time()
 
         # print stats on the number of files per split (all self.format files)
