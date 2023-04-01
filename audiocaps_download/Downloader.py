@@ -2,6 +2,7 @@ import os
 import time
 import joblib
 import pandas as pd
+import torchaudio
 from tqdm import tqdm
 
 class Downloader:
@@ -122,20 +123,122 @@ class Downloader:
             ) for _, row in tqdm(self.test_df.iterrows())
         )
 
-        # store the CSV files
-        self.train_df.to_csv(self.root_path + '/train.csv', index=False)
-        self.val_df.to_csv(self.root_path + '/val.csv', index=False)
-        self.test_df.to_csv(self.root_path + '/test.csv', index=False)
-
         t2 = time.time()
 
         # print stats on the number of files per split (all self.format files)
-        print(f"Number of files in the training set: {len(os.listdir(self.root_path + '/train/'))}")
-        print(f"Number of files in the validation set: {len(os.listdir(self.root_path + '/val/'))}")
-        print(f"Number of files in the test set: {len(os.listdir(self.root_path + '/test/'))}")
-        print(f"Time to download the dataset: {t2 - t1:.2f} seconds")
+        print(f"[Before cross-ckeck] Number of files in the training set: {len(os.listdir(self.root_path + '/train/'))}")
+        print(f"[Before cross-ckeck] Number of files in the validation set: {len(os.listdir(self.root_path + '/val/'))}")
+        print(f"[Before cross-ckeck] Number of files in the test set: {len(os.listdir(self.root_path + '/test/'))}")
+        print(f"[Before cross-ckeck] Time to download the dataset: {t2 - t1:.2f} seconds")
+
+        # cross-check the files
+        self.cross_check_dataset()
 
         print("AudioCaps dataset downloaded.")
+
+    def is_valid_file(self, path):
+        '''
+        It checks if the file is valid.
+        Returns True if the file is valid, False otherwise.
+        '''
+
+        # check if the file exists
+        if not os.path.isfile(path):
+            return False
+
+        try:
+            # load the file
+            waveform, sample_rate = torchaudio.load(audio_path)
+            # check if length is 0
+            if waveform.shape[1] == 0:
+                print('Error loading audio file: ', audio_path)
+                return False
+        except:
+            return False
+
+        return True
+
+    def cross_check_dataset(self, root_path, row):
+        '''
+        It checks if the file is valid.
+        Returns True if the file is valid, False otherwise.
+        '''
+
+        audiocaps_id = row['audiocap_id']
+
+        if self.is_valid_file(root_path + audiocaps_id + '.' + self.format):
+            self.updated_train_df = self.updated_train_df.append(row, ignore_index=True)
+        else:
+            # delete file if it exists
+            if os.path.isfile(root_path + audiocaps_id + '.' + self.format):
+                # delete file
+                os.remove(root_path + audiocaps_id + '.' + self.format)
+
+
+    def cross_check(self):
+        '''
+        This function aims at cross-checking the downloaded dataset.
+        It should remove files that are empty or corrupted.
+        '''
+        '''
+        for _, row in tqdm(self.train_df.iterrows()):
+            path = self.root_path + '/train/' + row['audiocap_id'] + '.' + self.format
+            if self.is_valid_file(path):
+                updated_train_df = updated_train_df.append(row, ignore_index=True)
+        '''
+
+        # Training set
+        print("Cross-checking the training set...")
+        self.updated_train_df = pd.DataFrame(columns=self.train_df.columns)
+        joblib.Parallel(n_jobs=self.n_jobs, verbose=10)(
+            joblib.delayed(self.cross_check_file)(
+                root_path=self.root_path + '/train/',
+                row=row,
+            ) for _, row in tqdm(self.train_df.iterrows())
+        )
+
+
+
+        # Validation set
+        print("Cross-checking the validation set...")
+        updated_val_df = pd.DataFrame(columns=self.val_df.columns)
+        joblib.Parallel(n_jobs=self.n_jobs, verbose=10)(
+            joblib.delayed(self.cross_check_file)(
+                root_path=self.root_path + '/val/',
+                row=row,
+            ) for _, row in tqdm(self.val_df.iterrows())
+        )
+
+        # Test set
+        print("Cross-checking the test set...")
+        updated_test_df = pd.DataFrame(columns=self.test_df.columns)
+        joblib.Parallel(n_jobs=self.n_jobs, verbose=10)(
+            joblib.delayed(self.cross_check_file)(
+                root_path=self.root_path + '/test/',
+                row=row,
+            ) for _, row in tqdm(self.test_df.iterrows())
+        )
+
+        # update the dataframes
+        print(f"Difference between the original training set and the updated one: {len(self.train_df) - len(self.updated_train_df)}")
+        print(f"Difference between the original validation set and the updated one: {len(self.val_df) - len(self.updated_val_df)}")
+        print(f"Difference between the original test set and the updated one: {len(self.test_df) - len(self.updated_test_df)}")
+
+        print(f"Training set: {len(self.updated_train_df)}")
+        print(f"Validation set: {len(self.updated_val_df)}")
+        print(f"Test set: {len(self.updated_test_df)}")
+
+        # update the dataframes
+        self.train_df = updated_train_df
+        self.val_df = updated_val_df
+        self.test_df = updated_test_df
+
+        
+        # store the CSV files
+        self.updated_train_df.to_csv(self.root_path + '/train.csv', index=False)
+        self.updated_val_df.to_csv(self.root_path + '/val.csv', index=False)
+        self.updated_test_df.to_csv(self.root_path + '/test.csv', index=False)
+
 
     def download_file(
             self, 
