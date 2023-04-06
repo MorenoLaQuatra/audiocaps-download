@@ -39,6 +39,7 @@ class Downloader:
         os.makedirs(self.root_path + '/train/', exist_ok=True)
         os.makedirs(self.root_path + '/val/', exist_ok=True)
         os.makedirs(self.root_path + '/test/', exist_ok=True)
+
         self.load_dataset()
 
     def load_dataset(self):
@@ -132,7 +133,7 @@ class Downloader:
         print(f"[Before cross-ckeck] Time to download the dataset: {t2 - t1:.2f} seconds")
 
         # cross-check the files
-        self.cross_check_dataset()
+        self.cross_check()
 
         print("AudioCaps dataset downloaded.")
 
@@ -148,31 +149,35 @@ class Downloader:
 
         try:
             # load the file
-            waveform, sample_rate = torchaudio.load(audio_path)
+            waveform, sample_rate = torchaudio.load(path)
             # check if length is 0
             if waveform.shape[1] == 0:
-                print('Error loading audio file: ', audio_path)
+                print('Error loading audio file: ', path)
                 return False
-        except:
+        except Exception as e:
+            print('Error loading audio file: ', path)
+            print(e)
             return False
 
         return True
 
-    def cross_check_dataset(self, root_path, row):
+    def cross_check_file(self, root_path, row):
         '''
         It checks if the file is valid.
         Returns True if the file is valid, False otherwise.
         '''
 
-        audiocaps_id = row['audiocap_id']
+        audiocaps_id = str(row['audiocap_id'])
 
         if self.is_valid_file(root_path + audiocaps_id + '.' + self.format):
-            self.updated_train_df = self.updated_train_df.append(row, ignore_index=True)
+            return int(audiocaps_id)
         else:
             # delete file if it exists
             if os.path.isfile(root_path + audiocaps_id + '.' + self.format):
                 # delete file
                 os.remove(root_path + audiocaps_id + '.' + self.format)
+
+        return None
 
 
     def cross_check(self):
@@ -189,35 +194,58 @@ class Downloader:
 
         # Training set
         print("Cross-checking the training set...")
+        list_of_audiocaps_id = []
         self.updated_train_df = pd.DataFrame(columns=self.train_df.columns)
-        joblib.Parallel(n_jobs=self.n_jobs, verbose=10)(
+        list_of_audiocaps_id = joblib.Parallel(n_jobs=self.n_jobs, verbose=10)(
             joblib.delayed(self.cross_check_file)(
                 root_path=self.root_path + '/train/',
                 row=row,
             ) for _, row in tqdm(self.train_df.iterrows())
         )
+        # cast self.train_df['audiocap_id'] to str
+        self.train_df['audiocap_id'] = self.train_df['audiocap_id'].astype(str)
+        list_of_audiocaps_id = [str(x) for x in list_of_audiocaps_id if x is not None]
+        self.updated_train_df = self.train_df[self.train_df['audiocap_id'].isin(list_of_audiocaps_id)]
 
-
+        print(list_of_audiocaps_id)
+        print("len: ", len(list_of_audiocaps_id))
 
         # Validation set
         print("Cross-checking the validation set...")
-        updated_val_df = pd.DataFrame(columns=self.val_df.columns)
-        joblib.Parallel(n_jobs=self.n_jobs, verbose=10)(
+        self.updated_val_df = pd.DataFrame(columns=self.val_df.columns)
+        list_of_audiocaps_id = []
+        list_of_audiocaps_id = joblib.Parallel(n_jobs=self.n_jobs, verbose=10)(
             joblib.delayed(self.cross_check_file)(
                 root_path=self.root_path + '/val/',
                 row=row,
             ) for _, row in tqdm(self.val_df.iterrows())
         )
+        # cast self.val_df['audiocap_id'] to str
+        self.val_df['audiocap_id'] = self.val_df['audiocap_id'].astype(str)
+        list_of_audiocaps_id = [str(x) for x in list_of_audiocaps_id if x is not None]
+        self.updated_val_df = self.val_df[self.val_df['audiocap_id'].isin(list_of_audiocaps_id)]
+        
+        print(list_of_audiocaps_id)
+        print("len: ", len(list_of_audiocaps_id))
 
         # Test set
         print("Cross-checking the test set...")
-        updated_test_df = pd.DataFrame(columns=self.test_df.columns)
-        joblib.Parallel(n_jobs=self.n_jobs, verbose=10)(
+        self.updated_test_df = pd.DataFrame(columns=self.test_df.columns)
+        list_of_audiocaps_id = []
+        list_of_audiocaps_id = joblib.Parallel(n_jobs=self.n_jobs, verbose=10)(
             joblib.delayed(self.cross_check_file)(
                 root_path=self.root_path + '/test/',
                 row=row,
             ) for _, row in tqdm(self.test_df.iterrows())
         )
+
+        print(list_of_audiocaps_id)
+        print("len: ", len(list_of_audiocaps_id))
+
+        # cast self.test_df['audiocap_id'] to str
+        self.test_df['audiocap_id'] = self.test_df['audiocap_id'].astype(str)
+        list_of_audiocaps_id = [str(x) for x in list_of_audiocaps_id if x is not None]
+        self.updated_test_df = self.test_df[self.test_df['audiocap_id'].isin(list_of_audiocaps_id)]
 
         # update the dataframes
         print(f"Difference between the original training set and the updated one: {len(self.train_df) - len(self.updated_train_df)}")
@@ -229,9 +257,9 @@ class Downloader:
         print(f"Test set: {len(self.updated_test_df)}")
 
         # update the dataframes
-        self.train_df = updated_train_df
-        self.val_df = updated_val_df
-        self.test_df = updated_test_df
+        self.train_df = self.updated_train_df
+        self.val_df = self.updated_val_df
+        self.test_df = self.updated_test_df
 
         
         # store the CSV files
@@ -258,6 +286,10 @@ class Downloader:
         
 
         target_file_path = os.path.join(root_path, audiocaps_id + '.' + self.format_dict[self.format])
+
+        # skip if the file already exists
+        if os.path.isfile(target_file_path):
+            return
 
         # Download the file using yt-dlp
         os.system(f'yt-dlp -x --audio-format {self.format} --audio-quality {self.quality} --output "{target_file_path}" --postprocessor-args "-ss {start_seconds} -to {end_seconds}" https://www.youtube.com/watch?v={ytid}')
