@@ -4,6 +4,7 @@
 # repository specific
 .*DS_Store
 AudioCaps_dataset/*
+audiocaps/*
 
 ### Python ###
 # Byte-compiled / optimized / DLL files

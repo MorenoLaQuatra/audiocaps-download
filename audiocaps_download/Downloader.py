@@ -292,6 +292,20 @@ class Downloader:
             return
 
         # Download the file using yt-dlp
-        os.system(f'yt-dlp -x --audio-format {self.format} --audio-quality {self.quality} --output "{target_file_path}" --postprocessor-args "-ss {start_seconds} -to {end_seconds}" https://www.youtube.com/watch?v={ytid}')
+        # os.system(f'yt-dlp -x --audio-format {self.format} --audio-quality {self.quality} --output "{target_file_path}" --postprocessor-args "-ss {start_seconds} -to {end_seconds}" https://www.youtube.com/watch?v={ytid}')
+        # Download the ENTIRE audio file
+        os.system(f'yt-dlp -x --audio-format {self.format} --audio-quality {self.quality} --output "{target_file_path}" https://www.youtube.com/watch?v={ytid}')
+        # now manually cut the audio file
+        try:
+            waveform, sample_rate = torchaudio.load(target_file_path)
+            waveform = waveform[:, int(start_seconds * sample_rate):int(end_seconds * sample_rate)]
+            torchaudio.save(target_file_path, waveform, sample_rate)
+        except Exception as e:
+            print('Error loading audio file: ', target_file_path)
+            print(e)
+            # delete file if it exists
+            if os.path.isfile(target_file_path):
+                # delete file
+                os.remove(target_file_path)
         
         return
