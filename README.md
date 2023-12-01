@@ -25,8 +25,27 @@ The following code snippet downloads the complete dataset in WAV format, and sto
 ```python
 from audiocaps_download import Downloader
 d = Downloader(root_path='audiocaps/', n_jobs=16)
-d.download(format = 'wav')
+d.download(format = 'wav') # it will cross-check the files with the csv files in the original repository
 ```
+
+## Download updated Dec 2023
+
+As of December 2023, the repository has been used to download the dataset in WAV format. The following table shows the number of files downloaded.
+
+Difference between the original training set and the updated one: 4651
+Difference between the original validation set and the updated one: 255
+Difference between the original test set and the updated one: 460
+Training set: 45187
+Validation set: 2220
+Test set: 4415
+
+| Split | Number of files (using this repo) | Number of files (original) |
+| --- | --- | --- |
+| Training | 45187 | 49838 |
+| Validation | 2220 | 2475 |
+| Test | 4415 | 4875 |
+
+The missing files may be due to the missing youtube videos, please open an issue [here](https://github.com/MorenoLaQuatra/audiocaps-download/issues/new) if you find any bug.
 
 ## Implementation
 

@@ -300,8 +300,9 @@ class Downloader:
             waveform, sample_rate = torchaudio.load(target_file_path)
             waveform = waveform[:, int(start_seconds * sample_rate):int(end_seconds * sample_rate)]
             torchaudio.save(target_file_path, waveform, sample_rate)
+                
         except Exception as e:
-            print('Error loading audio file: ', target_file_path)
+            print('\n\n ******** Error loading audio file: ', target_file_path)
             print(e)
             # delete file if it exists
             if os.path.isfile(target_file_path):
